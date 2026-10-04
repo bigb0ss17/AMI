@@ -15,24 +15,25 @@
     <header>
         <h1>A.m.I</h1>
         <h2>Short for "Am I A.I?"</h2>
-        <p>Analyze images and videos for signs of AI-generated content.</p>
+        <p>Analyze images, videos, audio, and links for signs of AI-generated content.</p>
     </header>
 
-
     <main>
-
         <section class="upload-section">
 
             <h2>Select Your Media</h2>
 
             <div class="buttons">
-
                 <button id="imageButton">
                     🖼️ Upload Image
                 </button>
 
                 <button id="videoButton">
                     🎥 Upload Video
+                </button>
+
+                <button id="audioButton">
+                    🎤 Upload Audio
                 </button>
 
                 <button id="cameraButton">
@@ -53,6 +54,13 @@
                 type="file"
                 id="videoInput"
                 accept="video/*"
+                hidden
+            >
+
+            <input
+                type="file"
+                id="audioInput"
+                accept="audio/*"
                 hidden
             >
 

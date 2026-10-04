@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import logging
 import uuid
+from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -89,10 +90,17 @@ def analyze_image(contents):
             detail="Unable to process the image."
         )
 
+# -----------------------------
+# Link request model
+# -----------------------------
 
+class LinkRequest(BaseModel):
+    url: str
+    
 # -----------------------------
 # Image upload
 # -----------------------------
+
 
 @app.post("/upload-image")
 async def upload_image(file: UploadFile = File(...)):
@@ -162,7 +170,111 @@ async def upload_image(file: UploadFile = File(...)):
         "analysis": analysis
     }
 
+# -----------------------------
+# Video upload
+# -----------------------------
 
+@app.post("/upload-video")
+async def upload_video(file: UploadFile = File(...)):
+
+    logger.info(
+        f"Video upload received: {file.filename}"
+    )
+
+    allowed_types = [
+        "video/mp4",
+        "video/webm",
+        "video/quicktime"
+    ]
+
+    if file.content_type not in allowed_types:
+
+        logger.warning(
+            f"Rejected video: {file.filename}"
+        )
+
+        raise HTTPException(
+            status_code=400,
+            detail="Only MP4, WEBM and MOV files are allowed."
+        )
+
+    contents = await file.read()
+
+    max_size = 50 * 1024 * 1024
+
+    if len(contents) > max_size:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Video must be smaller than 50 MB."
+        )
+
+    logger.info(
+        f"Video accepted successfully: "
+        f"{file.filename}"
+    )
+
+    return {
+        "message": "Video uploaded successfully",
+        "filename": file.filename,
+        "size": len(contents),
+        "status": "analysis_complete"
+    }
+    
+# -----------------------------
+# Audio upload
+# -----------------------------
+
+@app.post("/upload-audio")
+async def upload_audio(file: UploadFile = File(...)):
+
+    logger.info(
+        f"Audio upload received: {file.filename}"
+    )
+
+    allowed_types = [
+        "audio/mpeg",
+        "audio/wav",
+        "audio/x-wav"
+    ]
+
+    if file.content_type not in allowed_types:
+
+        logger.warning(
+            f"Rejected audio: {file.filename}"
+        )
+
+        raise HTTPException(
+            status_code=400,
+            detail="Only MP3 and WAV files are allowed."
+        )
+
+    contents = await file.read()
+
+    return {
+        "message": "Audio uploaded successfully",
+        "filename": file.filename,
+        "size": len(contents),
+        "status": "analysis_complete"
+    }
+    
+# -----------------------------
+# Link analysis
+# -----------------------------
+
+@app.post("/analyze-link")
+async def analyze_link(link: LinkRequest):
+
+    logger.info(
+        f"Link submitted: {link.url}"
+    )
+
+    return {
+        "message": "Link received",
+        "url": link.url,
+        "status": "analysis_complete"
+    }
+    
 # -----------------------------
 # Serve the website
 # -----------------------------

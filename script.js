@@ -4,6 +4,9 @@ const videoButton = document.getElementById("videoButton");
 const imageInput = document.getElementById("imageInput");
 const videoInput = document.getElementById("videoInput");
 
+const audioButton = document.getElementById("audioButton");
+const audioInput = document.getElementById("audioInput");
+
 const preview = document.getElementById("preview");
 
 
@@ -57,6 +60,31 @@ videoInput.addEventListener("change", function () {
     `;
 });
 
+// -----------------------------
+// Audio Upload
+// -----------------------------
+
+audioButton.addEventListener("click", function () {
+    audioInput.click();
+});
+
+audioInput.addEventListener("change", function () {
+
+    const file = audioInput.files[0];
+
+    if (!file) {
+        return;
+    }
+
+    const audioURL = URL.createObjectURL(file);
+
+    preview.innerHTML = `
+        <audio controls>
+            <source src="${audioURL}" type="${file.type}">
+            Your browser does not support audio playback.
+        </audio>
+    `;
+});
 
 // -----------------------------
 // Camera
@@ -98,7 +126,7 @@ cameraButton.addEventListener("click", async function () {
 const captureButton = document.getElementById("captureButton");
 const cameraCanvas = document.getElementById("cameraCanvas");
 
-captureButton.addEventListener("click", function () {
+captureButton.addEventListener("click", async function () {
 
     const context = cameraCanvas.getContext("2d");
 
@@ -119,6 +147,44 @@ captureButton.addEventListener("click", function () {
         <img src="${imageURL}" alt="Captured photo">
     `;
 
+    cameraCanvas.toBlob(
+    async (blob) => {
+
+        const formData = new FormData();
+
+        formData.append(
+            "file",
+            blob,
+            "camera_capture.png"
+        );
+
+        try {
+
+            const response =
+            await fetch(
+                "/upload-image",
+                {
+                    method: "POST",
+                    body: formData
+                }
+            );
+
+            const result =
+            await response.json();
+
+            resultDiv.innerHTML = `
+                <p>${result.message}</p>
+            `;
+
+        } catch (error) {
+
+            console.error(error);
+
+        }
+
+    },
+    "image/png"
+);
 });
 
 
@@ -131,22 +197,44 @@ const resultDiv = document.getElementById("result");
 
 analyzeButton.addEventListener("click", async function () {
 
-    const file = imageInput.files[0];
+    const imageFile = imageInput.files[0];
+    const videoFile = videoInput.files[0];
+    const audioFile = audioInput.files[0];
 
-    if (!file) {
-        alert("Please select an image first.");
+    if (!imageFile && !videoFile && !audioFile) {
+        alert("Please select a file first.");
         return;
     }
 
     const formData = new FormData();
 
-    formData.append("file", file);
+    let endpoint = "";
+
+    if (imageFile) {
+
+        formData.append("file", imageFile);
+
+        endpoint = "/upload-image";
+
+    } else if (videoFile) {
+
+        formData.append("file", videoFile);
+
+        endpoint = "/upload-video";
+
+    } else if (audioFile) {
+
+        formData.append("file", audioFile);
+
+        endpoint = "/upload-audio";
+
+    }
 
     try {
 
         // Send the image to the FastAPI backend.
         // Nginx forwards this request to FastAPI on port 8000.
-        const response = await fetch("/upload-image", {
+        const response = await fetch(endpoint, {
             method: "POST",
             body: formData
         });
@@ -165,14 +253,28 @@ analyzeButton.addEventListener("click", async function () {
         }
 
         // Display backend results
-        resultDiv.innerHTML = `
-            <p>${result.message}</p>
-            <p>Status: ${result.status}</p>
-            <p>Analysis: ${result.analysis.result}</p>
-            <p>Dimensions: ${result.analysis.width} × ${result.analysis.height}</p>
-            <p>Format: ${result.analysis.format}</p>
-            <p>Color Mode: ${result.analysis.color_mode}</p>
-        `;
+
+        if (endpoint === "/upload-image") {
+
+            resultDiv.innerHTML = `
+                <p>${result.message}</p>
+                <p>Status: ${result.status}</p>
+                <p>Analysis: ${result.analysis.result}</p>
+                <p>Dimensions: ${result.analysis.width} × ${result.analysis.height}</p>
+                <p>Format: ${result.analysis.format}</p>
+                <p>Color Mode: ${result.analysis.color_mode}</p>
+            `;
+
+        } else {
+
+            resultDiv.innerHTML = `
+                <p>${result.message}</p>
+                <p>Status: ${result.status}</p>
+                <p>Filename: ${result.filename}</p>
+                <p>Size: ${result.size} bytes</p>
+            `;
+
+        }
 
     } catch (error) {
 
@@ -185,3 +287,46 @@ analyzeButton.addEventListener("click", async function () {
     }
 
 });
+
+// -----------------------------
+// Analyze Link
+// -----------------------------
+
+const linkButton =
+document.getElementById("linkButton");
+
+linkButton.addEventListener(
+    "click",
+    async function () {
+
+        const url =
+        document.getElementById("mediaURL").value;
+
+        if (!url) {
+            alert("Please enter a URL.");
+            return;
+        }
+
+        const response =
+        await fetch("/analyze-link", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                url: url
+            })
+        });
+
+        const result =
+        await response.json();
+
+        resultDiv.innerHTML = `
+            <p>${result.message}</p>
+            <p>${result.url}</p>
+        `;
+    }
+);
