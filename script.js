@@ -18,8 +18,12 @@ const resultDiv = document.getElementById("result");
 const linkButton = document.getElementById("linkButton");
 const mediaURL = document.getElementById("mediaURL");
 
-// Local Flask AI detection API
-const AI_API = "http://127.0.0.1:5000";
+// Use the local Flask server during development.
+// Use the same website address when deployed to AWS.
+const AI_API =
+    ["localhost", "127.0.0.1"].includes(window.location.hostname)
+        ? "http://127.0.0.1:5000"
+        : "";
 
 // Currently selected media
 let selectedFile = null;
