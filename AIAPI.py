@@ -187,6 +187,24 @@ def detect_audio():
         analyzed_seconds=round(min(duration, MAX_AUDIO_SECONDS), 1),
     )
 
+# ---------------------------------------------------------------------------
+# Video
+# ---------------------------------------------------------------------------
+@app.route("/detect/video", methods=["POST"])
+def detect_video():
+
+    f = get_uploaded_file()
+
+    if f is None:
+        return jsonify({
+            "error": "No video uploaded."
+        }), 400
+
+    return build_response(
+        "video",
+        0.5,
+        message="Video analysis not implemented yet."
+    )
 
 @app.route("/health", methods=["GET"])
 def health():
