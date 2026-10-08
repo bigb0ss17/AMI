@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -15,28 +16,34 @@
     <header>
         <h1>A.m.I</h1>
         <h2>Short for "Am I A.I?"</h2>
-        <p>Analyze images, videos, audio, and links for signs of AI-generated content.</p>
+        <p>Analyze images, videos, audio, text, and links for signs of AI-generated content.</p>
     </header>
 
     <main>
+
         <section class="upload-section">
 
             <h2>Select Your Media</h2>
 
             <div class="buttons">
-                <button id="imageButton">
+
+                <button id="imageButton" type="button">
                     🖼️ Upload Image
                 </button>
 
-                <button id="videoButton">
+                <button id="videoButton" type="button">
                     🎥 Upload Video
                 </button>
 
-                <button id="audioButton">
+                <button id="audioButton" type="button">
                     🎤 Upload Audio
                 </button>
 
-                <button id="cameraButton">
+                <button id="textButton" type="button">
+                    📝 Analyze Text
+                </button>
+
+                <button id="cameraButton" type="button">
                     📷 Use Camera
                 </button>
 
@@ -66,35 +73,47 @@
 
         </section>
 
-        <section class="link-section">
+        <!-- Text AI Detection -->
+        <section class="text-section" id="textSection" hidden>
 
-    <h2>Analyze a Link</h2>
+            <h2>Analyze Text</h2>
 
-    <input
-        type="url"
-        id="mediaURL"
-        placeholder="Paste a video or image link here..."
-    >
+            <p>Paste text below to check for signs of AI-generated writing.</p>
 
-    <button id="linkButton">
-        🔍 Analyze Link
-    </button>
+            <textarea
+                id="textInput"
+                rows="8"
+                placeholder="Paste at least 40 words here..."
+                style="width: 100%; box-sizing: border-box;"
+            ></textarea>
 
         </section>
 
+        <section class="link-section">
+
+            <h2>Analyze a Link</h2>
+
+            <input
+                type="url"
+                id="mediaURL"
+                placeholder="Paste a video or image link here..."
+            >
+
+            <button id="linkButton" type="button">
+                🔍 Analyze Link
+            </button>
+
+        </section>
 
         <section class="preview-section">
 
             <h2>Preview</h2>
 
             <div id="preview">
-
                 <p>No media selected.</p>
-
             </div>
 
         </section>
-
 
         <section class="camera-section" id="cameraSection">
 
@@ -102,7 +121,7 @@
 
             <video id="cameraPreview" autoplay playsinline></video>
 
-            <button id="captureButton">
+            <button id="captureButton" type="button">
                 Capture Photo
             </button>
 
@@ -110,15 +129,13 @@
 
         </section>
 
-
-        <button id="analyzeButton">
+        <button id="analyzeButton" type="button">
             Analyze Media
         </button>
 
         <div id="result"></div>
 
     </main>
-
 
     <script src="script.js"></script>
 

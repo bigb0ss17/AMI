@@ -1,30 +1,132 @@
+
 const imageButton = document.getElementById("imageButton");
 const videoButton = document.getElementById("videoButton");
+const audioButton = document.getElementById("audioButton");
+const textButton = document.getElementById("textButton");
 
 const imageInput = document.getElementById("imageInput");
 const videoInput = document.getElementById("videoInput");
-
-const audioButton = document.getElementById("audioButton");
 const audioInput = document.getElementById("audioInput");
 
+const textSection = document.getElementById("textSection");
+const textInput = document.getElementById("textInput");
+
 const preview = document.getElementById("preview");
+const analyzeButton = document.getElementById("analyzeButton");
+const resultDiv = document.getElementById("result");
 
+const linkButton = document.getElementById("linkButton");
+const mediaURL = document.getElementById("mediaURL");
 
-// -----------------------------
+// Local Flask AI detection API
+const AI_API = "http://127.0.0.1:5000";
+
+// Currently selected media
+let selectedFile = null;
+let selectedType = null;
+let cameraStream = null;
+
+// -----------------------------------------
+// Helper: Switch Media Type
+// -----------------------------------------
+
+function selectMedia(file, type) {
+    selectedFile = file;
+    selectedType = type;
+
+    resultDiv.textContent = "";
+    textSection.hidden = true;
+}
+
+// -----------------------------------------
+// Helper: Display Detection Results
+// -----------------------------------------
+
+function displayResult(result) {
+    const aiPercent =
+        (result.ai_probability * 100).toFixed(2);
+
+    const humanPercent =
+        (result.human_probability * 100).toFixed(2);
+
+    resultDiv.innerHTML = `
+        <h2>Detection Result</h2>
+        <p><strong>Media Type:</strong> ${result.type}</p>
+        <p><strong>Prediction:</strong> ${result.label}</p>
+        <p><strong>AI Detection Score:</strong> ${aiPercent}%</p>
+        <p><strong>Human Detection Score:</strong> ${humanPercent}%</p>
+    `;
+
+    if (result.frames_analyzed !== undefined) {
+        const frames = document.createElement("p");
+        frames.textContent =
+            `Video Frames Analyzed: ${result.frames_analyzed}`;
+
+        resultDiv.appendChild(frames);
+    }
+
+    if (result.word_count !== undefined) {
+        const words = document.createElement("p");
+        words.textContent =
+            `Words Analyzed: ${result.word_count}`;
+
+        resultDiv.appendChild(words);
+    }
+
+    if (result.analyzed_seconds !== undefined) {
+        const seconds = document.createElement("p");
+        seconds.textContent =
+            `Audio Seconds Analyzed: ${result.analyzed_seconds}`;
+
+        resultDiv.appendChild(seconds);
+    }
+}
+
+// -----------------------------------------
+// Helper: Send Request to Flask
+// -----------------------------------------
+
+async function sendAnalysis(endpoint, options) {
+    const response = await fetch(
+        `${AI_API}${endpoint}`,
+        options
+    );
+
+    const rawResponse = await response.text();
+
+    let result;
+
+    try {
+        result = JSON.parse(rawResponse);
+    } catch {
+        throw new Error(
+            `Server error (${response.status}). Check Flask terminal.`
+        );
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            result.error || `Analysis failed (${response.status}).`
+        );
+    }
+
+    return result;
+}
+
+// -----------------------------------------
 // Image Upload
-// -----------------------------
+// -----------------------------------------
 
 imageButton.addEventListener("click", function () {
     imageInput.click();
 });
 
 imageInput.addEventListener("change", function () {
-
     const file = imageInput.files[0];
 
-    if (!file) {
-        return;
-    }
+    if (!file) return;
+
+    selectMedia(file, "image");
 
     const imageURL = URL.createObjectURL(file);
 
@@ -33,22 +135,20 @@ imageInput.addEventListener("change", function () {
     `;
 });
 
-
-// -----------------------------
+// -----------------------------------------
 // Video Upload
-// -----------------------------
+// -----------------------------------------
 
 videoButton.addEventListener("click", function () {
     videoInput.click();
 });
 
 videoInput.addEventListener("change", function () {
-
     const file = videoInput.files[0];
 
-    if (!file) {
-        return;
-    }
+    if (!file) return;
+
+    selectMedia(file, "video");
 
     const videoURL = URL.createObjectURL(file);
 
@@ -60,21 +160,20 @@ videoInput.addEventListener("change", function () {
     `;
 });
 
-// -----------------------------
+// -----------------------------------------
 // Audio Upload
-// -----------------------------
+// -----------------------------------------
 
 audioButton.addEventListener("click", function () {
     audioInput.click();
 });
 
 audioInput.addEventListener("change", function () {
-
     const file = audioInput.files[0];
 
-    if (!file) {
-        return;
-    }
+    if (!file) return;
+
+    selectMedia(file, "audio");
 
     const audioURL = URL.createObjectURL(file);
 
@@ -86,47 +185,66 @@ audioInput.addEventListener("change", function () {
     `;
 });
 
-// -----------------------------
+// -----------------------------------------
+// Text AI Detection
+// -----------------------------------------
+
+textButton.addEventListener("click", function () {
+    selectedFile = null;
+    selectedType = "text";
+
+    textSection.hidden = false;
+
+    preview.innerHTML = `
+        <p>
+            Text selected. Paste your writing above,
+            then click Analyze Media.
+        </p>
+    `;
+
+    resultDiv.textContent = "";
+    textInput.focus();
+});
+
+// -----------------------------------------
 // Camera
-// -----------------------------
+// -----------------------------------------
 
 const cameraButton = document.getElementById("cameraButton");
 const cameraSection = document.getElementById("cameraSection");
 const cameraPreview = document.getElementById("cameraPreview");
 
-let cameraStream;
-
 cameraButton.addEventListener("click", async function () {
-
+    textSection.hidden = true;
     cameraSection.style.display = "block";
 
     try {
-
-        cameraStream = await navigator.mediaDevices.getUserMedia({
-            video: true
-        });
+        if (!cameraStream) {
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: true
+            });
+        }
 
         cameraPreview.srcObject = cameraStream;
 
     } catch (error) {
-
         console.error("Camera access denied:", error);
-
         alert("Unable to access the camera.");
-
     }
-
 });
 
-
-// -----------------------------
+// -----------------------------------------
 // Capture Photo
-// -----------------------------
+// -----------------------------------------
 
 const captureButton = document.getElementById("captureButton");
 const cameraCanvas = document.getElementById("cameraCanvas");
 
-captureButton.addEventListener("click", async function () {
+captureButton.addEventListener("click", function () {
+    if (!cameraStream || !cameraPreview.videoWidth) {
+        alert("Please start the camera first.");
+        return;
+    }
 
     const context = cameraCanvas.getContext("2d");
 
@@ -141,192 +259,161 @@ captureButton.addEventListener("click", async function () {
         cameraCanvas.height
     );
 
-    const imageURL = cameraCanvas.toDataURL("image/png");
-
-    preview.innerHTML = `
-        <img src="${imageURL}" alt="Captured photo">
-    `;
-
-    cameraCanvas.toBlob(
-    async (blob) => {
-
-        const formData = new FormData();
-
-        formData.append(
-            "file",
-            blob,
-            "camera_capture.png"
-        );
-
-        try {
-
-            const response =
-            await fetch(
-                "/upload-image",
-                {
-                    method: "POST",
-                    body: formData
-                }
-            );
-
-            const result =
-            await response.json();
-
-            resultDiv.innerHTML = `
-                <p>${result.message}</p>
-            `;
-
-        } catch (error) {
-
-            console.error(error);
-
+    cameraCanvas.toBlob(function (blob) {
+        if (!blob) {
+            alert("Unable to capture photo.");
+            return;
         }
 
-    },
-    "image/png"
-);
+        const file = new File(
+            [blob],
+            "camera_capture.png",
+            { type: "image/png" }
+        );
+
+        selectMedia(file, "image");
+
+        const imageURL = URL.createObjectURL(blob);
+
+        preview.innerHTML = `
+            <img src="${imageURL}" alt="Captured photo">
+        `;
+
+    }, "image/png");
 });
 
-
-// -----------------------------
-// Analyze Image
-// -----------------------------
-
-const analyzeButton = document.getElementById("analyzeButton");
-const resultDiv = document.getElementById("result");
+// -----------------------------------------
+// Analyze Media
+// Image + Video + Audio + Text
+// -----------------------------------------
 
 analyzeButton.addEventListener("click", async function () {
-
-    const imageFile = imageInput.files[0];
-    const videoFile = videoInput.files[0];
-    const audioFile = audioInput.files[0];
-
-    if (!imageFile && !videoFile && !audioFile) {
-        alert("Please select a file first.");
+    if (!selectedType) {
+        alert("Please select media or text first.");
         return;
     }
 
-    const formData = new FormData();
+    let endpoint;
+    let requestOptions;
 
-    let endpoint = "";
+    if (selectedType === "text") {
+        const text = textInput.value.trim();
+        const wordCount = text.split(/\s+/).filter(Boolean).length;
 
-    if (imageFile) {
-
-        formData.append("file", imageFile);
-
-        endpoint = "/upload-image";
-
-    } else if (videoFile) {
-
-        formData.append("file", videoFile);
-
-        endpoint = "/upload-video";
-
-    } else if (audioFile) {
-
-        formData.append("file", audioFile);
-
-        endpoint = "/upload-audio";
-
-    }
-
-    try {
-
-        // Send the image to the FastAPI backend.
-        // Nginx forwards this request to FastAPI on port 8000.
-        const response = await fetch(endpoint, {
-            method: "POST",
-            body: formData
-        });
-
-        const result = await response.json();
-
-        // Handle backend errors
-        if (!response.ok) {
-
-            resultDiv.innerHTML = `
-                <p>Analysis failed.</p>
-                <p>${result.detail || "An unknown error occurred."}</p>
-            `;
-
+        if (wordCount < 40) {
+            resultDiv.textContent =
+                "Please enter at least 40 words.";
             return;
         }
 
-        // Display backend results
+        endpoint = "/detect/text";
 
-        if (endpoint === "/upload-image") {
-
-            resultDiv.innerHTML = `
-                <p>${result.message}</p>
-                <p>Status: ${result.status}</p>
-                <p>Analysis: ${result.analysis.result}</p>
-                <p>Dimensions: ${result.analysis.width} × ${result.analysis.height}</p>
-                <p>Format: ${result.analysis.format}</p>
-                <p>Color Mode: ${result.analysis.color_mode}</p>
-            `;
-
-        } else {
-
-            resultDiv.innerHTML = `
-                <p>${result.message}</p>
-                <p>Status: ${result.status}</p>
-                <p>Filename: ${result.filename}</p>
-                <p>Size: ${result.size} bytes</p>
-            `;
-
-        }
-
-    } catch (error) {
-
-        console.error("Error:", error);
-
-        resultDiv.innerHTML = `
-            <p>Unable to connect to the backend.</p>
-        `;
-
-    }
-
-});
-
-// -----------------------------
-// Analyze Link
-// -----------------------------
-
-const linkButton =
-document.getElementById("linkButton");
-
-linkButton.addEventListener(
-    "click",
-    async function () {
-
-        const url =
-        document.getElementById("mediaURL").value;
-
-        if (!url) {
-            alert("Please enter a URL.");
-            return;
-        }
-
-        const response =
-        await fetch("/analyze-link", {
-
+        requestOptions = {
             method: "POST",
-
             headers: {
                 "Content-Type": "application/json"
             },
+            body: JSON.stringify({ text: text })
+        };
 
-            body: JSON.stringify({
-                url: url
-            })
-        });
+    } else {
+        if (!selectedFile) {
+            alert("Please select a file first.");
+            return;
+        }
 
-        const result =
-        await response.json();
+        const endpoints = {
+            image: "/detect/image",
+            video: "/detect/video",
+            audio: "/detect/audio"
+        };
 
-        resultDiv.innerHTML = `
-            <p>${result.message}</p>
-            <p>${result.url}</p>
-        `;
+        if (!endpoints[selectedType]) {
+            resultDiv.textContent = "Unsupported media type.";
+            return;
+        }
+
+        endpoint = endpoints[selectedType];
+
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+
+        requestOptions = {
+            method: "POST",
+            body: formData
+        };
     }
-);
+
+    resultDiv.textContent = "Analyzing...";
+    analyzeButton.disabled = true;
+
+    try {
+        const result = await sendAnalysis(
+            endpoint,
+            requestOptions
+        );
+
+        displayResult(result);
+
+    } catch (error) {
+        console.error("AI API Error:", error);
+        resultDiv.textContent = error.message;
+
+    } finally {
+        analyzeButton.disabled = false;
+    }
+});
+
+// -----------------------------------------
+// Analyze Link
+// Image + Video URLs
+// -----------------------------------------
+
+linkButton.addEventListener("click", async function () {
+    const url = mediaURL.value.trim();
+
+    if (!url) {
+        alert("Please enter a URL.");
+        return;
+    }
+
+    try {
+        const parsedURL = new URL(url);
+
+        if (!["http:", "https:"].includes(parsedURL.protocol)) {
+            throw new Error(
+                "Please enter an HTTP or HTTPS URL."
+            );
+        }
+
+    } catch (error) {
+        resultDiv.textContent =
+            "Please enter a valid HTTP or HTTPS URL.";
+        return;
+    }
+
+    resultDiv.textContent = "Analyzing link...";
+    linkButton.disabled = true;
+
+    try {
+        const result = await sendAnalysis(
+            "/detect/link",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ url: url })
+            }
+        );
+
+        displayResult(result);
+
+    } catch (error) {
+        console.error("Link Error:", error);
+        resultDiv.textContent = error.message;
+
+    } finally {
+        linkButton.disabled = false;
+    }
+});

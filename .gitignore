@@ -1,0 +1,27 @@
+# Python virtual environments
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Downloaded AI models
+models/
+.cache/
+huggingface/
+
+# Temporary files
+temp/
+tmp/
+uploads/
+
+# Editor and OS files
+.vscode/
+.DS_Store
+Thumbs.db
