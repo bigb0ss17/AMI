@@ -1,9 +1,9 @@
 """
-Basic AI detection API: text, images, and audio.
+Basic AI detection API: text, images, audio, and video.
 
 Setup:
     pip install flask flask-cors transformers torch pillow numpy
-    # Audio decoding also needs ffmpeg installed on your system:
+    # Audio/video decoding also needs ffmpeg (and ffprobe) installed on your system:
     #   macOS:   brew install ffmpeg
     #   Ubuntu:  sudo apt install ffmpeg
     #   Windows: winget install ffmpeg
@@ -15,9 +15,16 @@ Endpoints (all return JSON with ai_probability, human_probability, label):
     POST /detect/text    JSON body: {"text": "..."}
     POST /detect/image   multipart form, file field name: "file"
     POST /detect/audio   multipart form, file field name: "file"
+    POST /detect/video   multipart form, file field name: "file"
     POST /detect         alias for /detect/text (backwards compatible)
     GET  /health
 """
+
+import io
+import json
+import os
+import subprocess
+import tempfile
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -27,7 +34,7 @@ from PIL import Image, UnidentifiedImageError
 
 app = Flask(__name__)
 CORS(app)  # lets your frontend call this from a different origin/port
-app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB upload limit
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB upload limit (videos are big)
 
 AI_THRESHOLD = 0.5
 
@@ -187,124 +194,129 @@ def detect_audio():
         analyzed_seconds=round(min(duration, MAX_AUDIO_SECONDS), 1),
     )
 
+
 # ---------------------------------------------------------------------------
 # Video
+#
+# Approach: sample frames evenly across the video, run each through the image
+# detector, and average the scores. If the video has an audio track, it is also
+# run through the audio detector and blended in. Uses ffmpeg/ffprobe (already
+# required for audio), so no extra Python dependencies.
 # ---------------------------------------------------------------------------
-MAX_VIDEO_FRAMES = 16 # frames sampled per video (more = slower but steadier)
-MIN_VIDEO_FRAMES_OK = 3 # need at least this many readable frames
-VIDEO_AUDIO_WEIGHT = 0.25 # share of the final score given to the audio track
- 
- 
+MAX_VIDEO_FRAMES = 16     # frames sampled per video (more = slower but steadier)
+MIN_VIDEO_FRAMES_OK = 3   # need at least this many readable frames
+VIDEO_AUDIO_WEIGHT = 0.25  # share of the final score given to the audio track
+
+
 def probe_video(path):
-"""Returns (duration_seconds, has_audio). Raises on failure."""
-out = subprocess.run(
-["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type",
-"-of", "json", path],
-capture_output=True, check=True, timeout=30,
-)
-info = json.loads(out.stdout)
-duration = float(info.get("format", {}).get("duration", 0) or 0)
-kinds = {s.get("codec_type") for s in info.get("streams", [])}
-if "video" not in kinds:
-raise ValueError("no video stream")
-return duration, "audio" in kinds
- 
- 
+    """Returns (duration_seconds, has_audio). Raises on failure."""
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type",
+         "-of", "json", path],
+        capture_output=True, check=True, timeout=30,
+    )
+    info = json.loads(out.stdout)
+    duration = float(info.get("format", {}).get("duration", 0) or 0)
+    kinds = {s.get("codec_type") for s in info.get("streams", [])}
+    if "video" not in kinds:
+        raise ValueError("no video stream")
+    return duration, "audio" in kinds
+
+
 def extract_frame(path, timestamp):
-"""Grabs one frame at `timestamp` seconds as a PIL image (or None)."""
-proc = subprocess.run(
-["ffmpeg", "-v", "error", "-ss", f"{timestamp:.3f}", "-i", path,
-"-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"],
-capture_output=True, timeout=30,
-)
-if proc.returncode != 0 or not proc.stdout:
-return None
-try:
-return Image.open(io.BytesIO(proc.stdout)).convert("RGB")
-except (UnidentifiedImageError, OSError):
-return None
- 
- 
+    """Grabs one frame at `timestamp` seconds as a PIL image (or None)."""
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-ss", f"{timestamp:.3f}", "-i", path,
+         "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"],
+        capture_output=True, timeout=30,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        return None
+    try:
+        return Image.open(io.BytesIO(proc.stdout)).convert("RGB")
+    except (UnidentifiedImageError, OSError):
+        return None
+
+
 @app.route("/detect/video", methods=["POST"])
 def detect_video():
-f = get_uploaded_file()
-if f is None:
-return jsonify({"error": "No video uploaded (use form field 'file')."}), 400
- 
-suffix = os.path.splitext(f.filename)[1] or ".mp4"
-tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-try:
-f.save(tmp)
-tmp.close()
- 
-try:
-duration, has_audio = probe_video(tmp.name)
-except FileNotFoundError:
-return jsonify({"error": "ffmpeg/ffprobe is not installed on the server."}), 500
-except Exception:
-return jsonify({"error": "Could not read that file as a video."}), 400
- 
-if duration <= 0:
-return jsonify({"error": "Could not determine video length."}), 400
- 
-# Evenly spaced timestamps, avoiding the very first/last instant
-n = MAX_VIDEO_FRAMES
-timestamps = [duration * (i + 0.5) / n for i in range(n)]
- 
-frame_scores = []
-for t in timestamps:
-frame = extract_frame(tmp.name, t)
-if frame is None:
-continue
-results = image_detector(frame, top_k=None)
-frame_scores.append(ai_probability_from_scores(results))
- 
-if len(frame_scores) < MIN_VIDEO_FRAMES_OK:
-return jsonify({"error": "Could not extract enough frames from that video."}), 400
- 
-visual_prob = sum(frame_scores) / len(frame_scores)
-ai_prob = visual_prob
-audio_prob = None
- 
-if has_audio:
-try:
-sampling_rate = audio_detector.feature_extractor.sampling_rate
-with open(tmp.name, "rb") as vf:
-audio = ffmpeg_read(vf.read(), sampling_rate)
-if len(audio) >= sampling_rate:
-audio = audio[: sampling_rate * MAX_AUDIO_SECONDS]
-audio_results = audio_detector(
-{"raw": audio, "sampling_rate": sampling_rate}, top_k=None
-)
-audio_prob = ai_probability_from_scores(audio_results)
-ai_prob = (
-(1 - VIDEO_AUDIO_WEIGHT) * visual_prob
-+ VIDEO_AUDIO_WEIGHT * audio_prob
-)
-except Exception:
-audio_prob = None # audio is a bonus signal; ignore failures
- 
-return build_response(
-"video",
-ai_prob,
-duration_seconds=round(duration, 1),
-frames_analyzed=len(frame_scores),
-visual_ai_probability=round(visual_prob, 4),
-audio_ai_probability=None if audio_prob is None else round(audio_prob, 4),
-frame_scores=[round(s, 4) for s in frame_scores],
-)
-finally:
-try:
-os.unlink(tmp.name)
-except OSError:
-pass
- 
- 
+    f = get_uploaded_file()
+    if f is None:
+        return jsonify({"error": "No video uploaded (use form field 'file')."}), 400
+
+    suffix = os.path.splitext(f.filename)[1] or ".mp4"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        f.save(tmp)
+        tmp.close()
+
+        try:
+            duration, has_audio = probe_video(tmp.name)
+        except FileNotFoundError:
+            return jsonify({"error": "ffmpeg/ffprobe is not installed on the server."}), 500
+        except Exception:
+            return jsonify({"error": "Could not read that file as a video."}), 400
+
+        if duration <= 0:
+            return jsonify({"error": "Could not determine video length."}), 400
+
+        # Evenly spaced timestamps, avoiding the very first/last instant
+        n = MAX_VIDEO_FRAMES
+        timestamps = [duration * (i + 0.5) / n for i in range(n)]
+
+        frame_scores = []
+        for t in timestamps:
+            frame = extract_frame(tmp.name, t)
+            if frame is None:
+                continue
+            results = image_detector(frame, top_k=None)
+            frame_scores.append(ai_probability_from_scores(results))
+
+        if len(frame_scores) < MIN_VIDEO_FRAMES_OK:
+            return jsonify({"error": "Could not extract enough frames from that video."}), 400
+
+        visual_prob = sum(frame_scores) / len(frame_scores)
+        ai_prob = visual_prob
+        audio_prob = None
+
+        if has_audio:
+            try:
+                sampling_rate = audio_detector.feature_extractor.sampling_rate
+                with open(tmp.name, "rb") as vf:
+                    audio = ffmpeg_read(vf.read(), sampling_rate)
+                if len(audio) >= sampling_rate:
+                    audio = audio[: sampling_rate * MAX_AUDIO_SECONDS]
+                    audio_results = audio_detector(
+                        {"raw": audio, "sampling_rate": sampling_rate}, top_k=None
+                    )
+                    audio_prob = ai_probability_from_scores(audio_results)
+                    ai_prob = (
+                        (1 - VIDEO_AUDIO_WEIGHT) * visual_prob
+                        + VIDEO_AUDIO_WEIGHT * audio_prob
+                    )
+            except Exception:
+                audio_prob = None  # audio is a bonus signal; ignore failures
+
+        return build_response(
+            "video",
+            ai_prob,
+            duration_seconds=round(duration, 1),
+            frames_analyzed=len(frame_scores),
+            visual_ai_probability=round(visual_prob, 4),
+            audio_ai_probability=None if audio_prob is None else round(audio_prob, 4),
+            frame_scores=[round(s, 4) for s in frame_scores],
+        )
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+
+
 @app.route("/health", methods=["GET"])
 def health():
-return jsonify({"status": "ok"})
- 
- 
-if __name__ == "__main__":
-app.run(host="0.0.0.0", port=5000, debug=False)
+    return jsonify({"status": "ok"})
 
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=False)
