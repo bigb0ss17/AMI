@@ -203,7 +203,7 @@ def detect_audio():
 # run through the audio detector and blended in. Uses ffmpeg/ffprobe (already
 # required for audio), so no extra Python dependencies.
 # ---------------------------------------------------------------------------
-MAX_VIDEO_FRAMES = 16     # frames sampled per video (more = slower but steadier)
+MAX_VIDEO_FRAMES = 48     # frames sampled per video (more = slower but steadier)
 MIN_VIDEO_FRAMES_OK = 3   # need at least this many readable frames
 VIDEO_AUDIO_WEIGHT = 0.25  # share of the final score given to the audio track
 
