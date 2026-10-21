@@ -1,11 +1,55 @@
-from PIL import Image
-from io import BytesIO
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+import os
 import logging
 import uuid
+from io import BytesIO
+
+import requests
+from PIL import Image
 from pydantic import BaseModel
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    HTTPException,
+    Header,
+)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+# -----------------------------
+# CAPTCHA verification
+# -----------------------------
+
+RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY")
+
+if not RECAPTCHA_SECRET_KEY:
+    raise RuntimeError(
+        "Missing RECAPTCHA_SECRET_KEY environment variable."
+    )
+
+
+def verify_recaptcha(token: str) -> bool:
+    if not token:
+        return False
+
+    try:
+        response = requests.post(
+            "https://www.google.com/recaptcha/api/siteverify",
+            data={
+                "secret": RECAPTCHA_SECRET_KEY,
+                "response": token,
+            },
+            timeout=10,
+        )
+
+        response.raise_for_status()
+        result = response.json()
+
+        return result.get("success", False) is True
+
+    except (requests.RequestException, ValueError) as error:
+        logger.error("reCAPTCHA verification failed: %s", error)
+        return False
 
 app = FastAPI()
 
@@ -28,10 +72,15 @@ logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Recaptcha-Token"],
 )
 
 
@@ -102,9 +151,23 @@ class LinkRequest(BaseModel):
 # -----------------------------
 
 
+@app.post("/detect/image")
 @app.post("/upload-image")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(
+    file: UploadFile = File(...),
+    captcha_token: str = Header(
+        default="",
+        alias="X-Recaptcha-Token"
+    ),
+):
     
+    # Verify the CAPTCHA token
+    if not verify_recaptcha(captcha_token):
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid reCAPTCHA verification."
+        )
+
     analysis_id = str(uuid.uuid4())
 
     logger.info(
@@ -174,8 +237,21 @@ async def upload_image(file: UploadFile = File(...)):
 # Video upload
 # -----------------------------
 
+@app.post("/detect/video")
 @app.post("/upload-video")
-async def upload_video(file: UploadFile = File(...)):
+async def upload_video(
+    file: UploadFile = File(...),
+    captcha_token: str = Header(
+        default="",
+        alias="X-Recaptcha-Token"
+    ),
+):
+
+    if not verify_recaptcha(captcha_token):
+        raise HTTPException(
+            status_code=403,
+            detail="reCAPTCHA verification failed."
+        )
 
     logger.info(
         f"Video upload received: {file.filename}"
@@ -225,8 +301,21 @@ async def upload_video(file: UploadFile = File(...)):
 # Audio upload
 # -----------------------------
 
+@app.post("/detect/audio")
 @app.post("/upload-audio")
-async def upload_audio(file: UploadFile = File(...)):
+async def upload_audio(
+    file: UploadFile = File(...),
+    captcha_token: str = Header(
+        default="",
+        alias="X-Recaptcha-Token"
+    ),
+):
+
+    if not verify_recaptcha(captcha_token):
+        raise HTTPException(
+            status_code=403,
+            detail="reCAPTCHA verification failed."
+        )
 
     logger.info(
         f"Audio upload received: {file.filename}"
@@ -259,20 +348,76 @@ async def upload_audio(file: UploadFile = File(...)):
     }
     
 # -----------------------------
+# Text analysis endpoint
+# -----------------------------
+
+class TextRequest(BaseModel):
+    text: str
+
+
+@app.post("/detect/text")
+async def detect_text(
+    data: TextRequest,
+    captcha_token: str = Header(
+        default="",
+        alias="X-Recaptcha-Token"
+    ),
+):
+    if not verify_recaptcha(captcha_token):
+        raise HTTPException(
+            status_code=403,
+            detail="reCAPTCHA verification failed."
+        )
+
+    text = data.text.strip()
+    word_count = len(text.split())
+
+    if word_count < 40:
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide at least 40 words."
+        )
+
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "Text submission works, but an AI-text detection "
+            "model has not been configured."
+        )
+    )
+
+# -----------------------------
 # Link analysis
 # -----------------------------
 
-@app.post("/analyze-link")
-async def analyze_link(link: LinkRequest):
 
-    logger.info(
-        f"Link submitted: {link.url}"
-    )
+@app.post("/detect/link")
+@app.post("/upload-link")
+async def upload_link(
+    link: LinkRequest,
+    captcha_token: str = Header(
+        default="",
+        alias="X-Recaptcha-Token"
+    ),
+):
+    if not verify_recaptcha(captcha_token):
+        raise HTTPException(
+            status_code=403,
+            detail="reCAPTCHA verification failed."
+        )
+
+    if link.url.split(":", 1)[0].lower() not in ("http", "https"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only HTTP and HTTPS links are accepted."
+        )
+
+    logger.info("Link submitted: %s", link.url)
 
     return {
-        "message": "Link received",
+        "message": "Link received successfully.",
         "url": link.url,
-        "status": "analysis_complete"
+        "status": "received",
     }
     
 # -----------------------------

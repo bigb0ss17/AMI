@@ -22,13 +22,58 @@ const mediaURL = document.getElementById("mediaURL");
 // Use the same website address when deployed to AWS.
 const AI_API =
     ["localhost", "127.0.0.1"].includes(window.location.hostname)
-        ? "http://127.0.0.1:5000"
+        ? "http://127.0.0.1:8000"
         : "";
 
 // Currently selected media
 let selectedFile = null;
 let selectedType = null;
 let cameraStream = null;
+let recaptchaWidgetId = null;
+let captchaToken = null;
+
+const captchaSection =
+    document.getElementById("captchaSection");
+
+// Google calls this after the reCAPTCHA API loads.
+function initializeRecaptcha() {
+    if (recaptchaWidgetId !== null) {
+        return;
+    }
+
+    if (
+        typeof grecaptcha === "undefined" ||
+        typeof grecaptcha.render !== "function"
+    ) {
+        resultDiv.textContent =
+            "Human verification is still loading. Please wait a moment and click Analyze again.";
+        return;
+    }
+
+    recaptchaWidgetId = grecaptcha.render(
+        "recaptcha-container",
+        {
+            sitekey: "6LdcSPotAAAAAFTI6FyCnw0R3Meb-ga4EsoRJIui",
+
+            callback: function (token) {
+                captchaToken = token;
+                runAnalysisAfterCaptcha(token);
+            },
+
+            "expired-callback": function () {
+                captchaToken = null;
+                resultDiv.textContent =
+                    "Verification expired. Please verify again.";
+            },
+
+            "error-callback": function () {
+                captchaToken = null;
+                resultDiv.textContent =
+                    "CAPTCHA failed to load. Please try again.";
+            }
+        }
+    );
+}
 
 // -----------------------------------------
 // Helper: Switch Media Type
@@ -109,10 +154,12 @@ async function sendAnalysis(endpoint, options) {
     }
 
     if (!response.ok) {
-        throw new Error(
-            result.error || `Analysis failed (${response.status}).`
-        );
-    }
+    throw new Error(
+        result.detail ||
+        result.error ||
+        `Analysis failed (${response.status}).`
+    );
+}
 
     return result;
 }
@@ -291,38 +338,91 @@ captureButton.addEventListener("click", function () {
 // Image + Video + Audio + Text
 // -----------------------------------------
 
-analyzeButton.addEventListener("click", async function () {
+analyzeButton.addEventListener("click", function () {
     if (!selectedType) {
         alert("Please select media or text first.");
         return;
     }
 
-    let endpoint;
-    let requestOptions;
-
+    // Validate text before asking for CAPTCHA.
     if (selectedType === "text") {
-        const text = textInput.value.trim();
-        const wordCount = text.split(/\s+/).filter(Boolean).length;
+        const wordCount = textInput.value
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean).length;
 
         if (wordCount < 40) {
             resultDiv.textContent =
                 "Please enter at least 40 words.";
             return;
         }
+    }
+
+    captchaSection.hidden = false;
+    if (recaptchaWidgetId === null) {
+    initializeRecaptcha();
+}
+
+    resultDiv.textContent =
+        "Please complete the human verification.";
+
+    captchaSection.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+    });
+});
+
+async function runAnalysisAfterCaptcha(token) {
+    if (!token) {
+        resultDiv.textContent =
+            "Please complete the CAPTCHA first.";
+        return;
+    }
+
+    let endpoint;
+    let requestOptions;
+
+    const headers = {
+        "X-Recaptcha-Token": token
+    };
+
+    if (selectedType === "text") {
+        const text = textInput.value.trim();
 
         endpoint = "/detect/text";
 
         requestOptions = {
             method: "POST",
             headers: {
+                ...headers,
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ text: text })
+            body: JSON.stringify({ text })
+        };
+
+    } else if (selectedType === "link") {
+        const url = mediaURL.value.trim();
+
+        if (!url) {
+            resultDiv.textContent = "Please enter a URL.";
+            return;
+        }
+
+        endpoint = "/detect/link";
+
+        requestOptions = {
+            method: "POST",
+            headers: {
+                ...headers,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ url })
         };
 
     } else {
         if (!selectedFile) {
-            alert("Please select a file first.");
+            resultDiv.textContent =
+                "Please select a file first.";
             return;
         }
 
@@ -332,24 +432,26 @@ analyzeButton.addEventListener("click", async function () {
             audio: "/detect/audio"
         };
 
-        if (!endpoints[selectedType]) {
+        endpoint = endpoints[selectedType];
+
+        if (!endpoint) {
             resultDiv.textContent = "Unsupported media type.";
             return;
         }
-
-        endpoint = endpoints[selectedType];
 
         const formData = new FormData();
         formData.append("file", selectedFile);
 
         requestOptions = {
             method: "POST",
+            headers,
             body: formData
         };
     }
 
-    resultDiv.textContent = "Analyzing...";
     analyzeButton.disabled = true;
+    linkButton.disabled = true;
+    resultDiv.textContent = "Processing request...";
 
     try {
         const result = await sendAnalysis(
@@ -357,27 +459,50 @@ analyzeButton.addEventListener("click", async function () {
             requestOptions
         );
 
-        displayResult(result);
+        // The current backend does not return AI probabilities.
+        if (
+            typeof result.ai_probability === "number" &&
+            typeof result.human_probability === "number" &&
+            result.type !== undefined &&
+            result.label !== undefined
+        ) {
+            displayResult(result);
+        } else {
+            resultDiv.textContent =
+                result.message ||
+                "The server received the request, but AI detection " +
+                "results are not available yet.";
+        }
 
     } catch (error) {
-        console.error("AI API Error:", error);
+        console.error("Analysis error:", error);
         resultDiv.textContent = error.message;
 
     } finally {
         analyzeButton.disabled = false;
+        linkButton.disabled = false;
+        captchaToken = null;
+
+        if (recaptchaWidgetId !== null) {
+            grecaptcha.reset(recaptchaWidgetId);
+        }
     }
-});
+}
 
 // -----------------------------------------
 // Analyze Link
 // Image + Video URLs
 // -----------------------------------------
 
-linkButton.addEventListener("click", async function () {
+// -----------------------------------------
+// Analyze Link
+// -----------------------------------------
+
+linkButton.addEventListener("click", function () {
     const url = mediaURL.value.trim();
 
     if (!url) {
-        alert("Please enter a URL.");
+        resultDiv.textContent = "Please enter a URL.";
         return;
     }
 
@@ -385,39 +510,28 @@ linkButton.addEventListener("click", async function () {
         const parsedURL = new URL(url);
 
         if (!["http:", "https:"].includes(parsedURL.protocol)) {
-            throw new Error(
-                "Please enter an HTTP or HTTPS URL."
-            );
+            throw new Error("Invalid URL protocol.");
         }
-
-    } catch (error) {
+    } catch {
         resultDiv.textContent =
             "Please enter a valid HTTP or HTTPS URL.";
         return;
     }
 
-    resultDiv.textContent = "Analyzing link...";
-    linkButton.disabled = true;
+    selectedFile = null;
+    selectedType = "link";
 
-    try {
-        const result = await sendAnalysis(
-            "/detect/link",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ url: url })
-            }
-        );
+    captchaSection.hidden = false;
+    if (recaptchaWidgetId === null) {
+    initializeRecaptcha();
+}
 
-        displayResult(result);
+    resultDiv.textContent =
+        "Please complete the human verification.";
 
-    } catch (error) {
-        console.error("Link Error:", error);
-        resultDiv.textContent = error.message;
-
-    } finally {
-        linkButton.disabled = false;
-    }
+    captchaSection.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+    });
 });
+

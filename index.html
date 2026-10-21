@@ -9,6 +9,7 @@
     <title>A.m.I</title>
 
     <link rel="stylesheet" href="style.css">
+
 </head>
 
 <body>
@@ -128,7 +129,15 @@
             <canvas id="cameraCanvas" hidden></canvas>
 
         </section>
-
+        
+        <!-- reCAPTCHA -->
+        <section id="captchaSection" hidden>
+            <h2>Human Verification</h2>
+            <p>Please verify that you are human to continue.</p>
+            
+            <div id="recaptcha-container"></div>
+        </section>
+        
         <button id="analyzeButton" type="button">
             Analyze Media
         </button>
@@ -137,8 +146,17 @@
 
     </main>
 
+    <script>
+    window.onRecaptchaLoad = function() {
+        // CAPTCHA initializes when the user requests analysis.
+    };
+</script>
+    
     <script src="script.js"></script>
-
+    <script
+    src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit"
+    async
+    defer></script>
 </body>
 
 </html>
