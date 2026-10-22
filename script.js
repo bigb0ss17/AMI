@@ -628,11 +628,6 @@ async function runAnalysisAfterCaptcha(token) {
 
 // -----------------------------------------
 // Analyze Link
-// Image + Video URLs
-// -----------------------------------------
-
-// -----------------------------------------
-// Analyze Link
 // -----------------------------------------
 
 linkButton.addEventListener("click", function () {
