@@ -372,14 +372,29 @@ cameraButton.addEventListener("click", async function () {
         }
 
         if (!cameraStream) {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-            facingMode: { exact: "environment" }
-        },
-        audio: false
-    });
-
+    try {
+        // Try the rear camera first (phones).
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: { exact: "environment" }
+            },
+            audio: false
+        });
+    } catch (error) {
+        // Fall back to the default camera (desktops).
+        if (
+            error.name !== "OverconstrainedError" &&
+            error.name !== "NotFoundError"
+        ) {
+            throw error;
         }
+
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+        });
+    }
+}
 
         cameraPreview.srcObject = cameraStream;
 
