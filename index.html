@@ -4,159 +4,333 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
 
-    <title>A.m.I</title>
+    <title>A.m.I | AI Content Detector</title>
 
-    <link rel="stylesheet" href="style.css">
+    <!-- Bootstrap 5 -->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
 
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css?v=4">
 </head>
 
 <body>
 
-    <header>
-        <h1>A.m.I</h1>
-        <h2>Short for "Am I A.I?"</h2>
-        <p>Analyze images, videos, audio, text, and links for signs of AI-generated content.</p>
+    <!-- WEBSITE HEADER -->
+    <header class="site-header">
+        <div class="container">
+            <h1>A.m.I</h1>
+            <h2>Short for "Am I A.I?"</h2>
+            <p>
+                Analyze images, videos, audio, text, and links
+                for signs of AI-generated content.
+            </p>
+        </div>
     </header>
 
-    <main>
+    <main class="container">
 
-        <section class="upload-section">
+        <!-- WORKSPACE HEADING -->
+        <div class="workspace-heading">
+            <div>
+                <span class="workspace-eyebrow">
+                    AI CONTENT DETECTION
+                </span>
 
-            <h2>Select Your Media</h2>
+                <h2>Content Analysis</h2>
 
-            <div class="buttons">
+                <p>
+                    Select a source, preview your content,
+                    and run an analysis.
+                </p>
+            </div>
 
-                <button id="imageButton" type="button">
-                    🖼️ Upload Image
-                </button>
+            <span class="workspace-status">
+                <span class="status-dot"></span>
+                A.m.I Workspace
+            </span>
+        </div>
 
-                <button id="videoButton" type="button">
-                    🎥 Upload Video
-                </button>
+        <!-- ONE CONNECTED WORKSPACE -->
+        <div class="analysis-workspace">
 
-                <button id="audioButton" type="button">
-                    🎤 Upload Audio
-                </button>
+            <!-- STEP 01 -->
+            <section class="upload-section">
 
-                <button id="textButton" type="button">
-                    📝 Analyze Text
-                </button>
+                <div class="step-heading">
+                    <div>
+                        <span class="step-label">STEP 01</span>
+                        <h2>Choose your content</h2>
+                    </div>
 
-                <button id="cameraButton" type="button">
-                    📷 Use Camera
-                </button>
+                    <span class="step-description">
+                        Select a content type
+                    </span>
+                </div>
+
+                <!-- MEDIA CARDS -->
+                <div class="buttons">
+
+                    <button id="imageButton" type="button">
+                        <span class="media-icon">🖼️</span>
+                        <span class="media-name">Image</span>
+                    </button>
+
+                    <button id="videoButton" type="button">
+                        <span class="media-icon">🎬</span>
+                        <span class="media-name">Video</span>
+                    </button>
+
+                    <button id="audioButton" type="button">
+                        <span class="media-icon">🎤</span>
+                        <span class="media-name">Audio</span>
+                    </button>
+
+                    <button id="textButton" type="button">
+                        <span class="media-icon">📝</span>
+                        <span class="media-name">Text</span>
+                    </button>
+
+                    <button id="cameraButton" type="button">
+                        <span class="media-icon">📷</span>
+                        <span class="media-name">Camera</span>
+                    </button>
+
+                </div>
+
+                <!-- FILE INPUTS -->
+                <input
+                    type="file"
+                    id="imageInput"
+                    accept="image/jpeg,image/png,image/webp"
+                    hidden
+                >
+
+                <input
+                    type="file"
+                    id="videoInput"
+                    accept="video/mp4,video/webm,video/quicktime"
+                    hidden
+                >
+
+                <input
+                    type="file"
+                    id="audioInput"
+                    accept="audio/mpeg,audio/wav,audio/x-wav"
+                    hidden
+                >
+
+                <!-- LINK INPUT IN SAME PANEL -->
+                <div class="link-section">
+
+                    <label for="mediaURL" class="link-label">
+                        Or analyze a media link
+                    </label>
+
+                    <div class="link-controls">
+
+                        <input
+                            type="url"
+                            id="mediaURL"
+                            placeholder="https://example.com/image.jpg"
+                        >
+
+                        <button id="linkButton" type="button">
+                            🔗 Use Link
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+            <!-- TEXT INPUT: SHOWN ONLY WHEN SELECTED -->
+            <section class="text-section" id="textSection" hidden>
+
+                <div class="step-heading">
+                    <div>
+                        <span class="step-label">TEXT INPUT</span>
+                        <h2>Analyze Text</h2>
+                    </div>
+                </div>
+
+                <p>Paste at least 40 words below.</p>
+
+                <textarea
+                    id="textInput"
+                    rows="5"
+                    placeholder="Paste your writing here..."
+                ></textarea>
+
+            </section>
+
+            <!-- TWO-COLUMN DASHBOARD -->
+            <div class="row g-3 dashboard-row">
+
+                <!-- STEP 02: PREVIEW -->
+                <div class="col-12 col-lg-7">
+
+                    <section class="preview-section h-100">
+
+                        <div class="step-heading">
+                            <div>
+                                <span class="step-label">STEP 02</span>
+                                <h2>Content Preview</h2>
+                            </div>
+                        </div>
+
+                        <!-- NORMAL PREVIEW -->
+                        <div id="preview">
+                            <div class="empty-preview">
+                                <span class="empty-preview-icon">📂</span>
+
+                                <p>No media selected yet.</p>
+
+                                <small>
+                                    Choose a content type above
+                                    to get started.
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- CAMERA PREVIEW -->
+                        <div
+                            class="camera-section"
+                            id="cameraSection"
+                            style="display: none;"
+                        >
+
+                            <div class="camera-layout">
+
+                                <video
+                                    id="cameraPreview"
+                                    autoplay
+                                    playsinline
+                                    muted
+                                ></video>
+
+                                <canvas
+                                    id="cameraCanvas"
+                                    hidden
+                                ></canvas>
+
+                                <div class="camera-controls">
+
+                                    <button
+                                        id="captureButton"
+                                        type="button"
+                                    >
+                                        📸 Capture Photo
+                                    </button>
+
+                                    <button
+                                        id="stopCameraButton"
+                                        type="button"
+                                    >
+                                        ⏹ Stop Camera
+                                    </button>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </section>
+
+                </div>
+
+                <!-- STEP 03: ANALYSIS -->
+                <div class="col-12 col-lg-5">
+
+                    <section class="analysis-action h-100">
+
+                        <div class="step-heading">
+                            <div>
+                                <span class="step-label">STEP 03</span>
+                                <h2>Run Analysis</h2>
+                            </div>
+                        </div>
+
+                        <div class="analysis-content">
+
+                            <div class="analysis-icon">✨</div>
+
+                            <p>
+                                Your selected content will be
+                                submitted for AI detection analysis.
+                            </p>
+
+                            <button
+                                id="analyzeButton"
+                                type="button"
+                            >
+                                ✨ Analyze Content
+                            </button>
+
+                            <small class="analysis-note">
+                                Detection results are estimates
+                                and may not always be accurate.
+                            </small>
+
+                        </div>
+
+                    </section>
+
+                </div>
 
             </div>
 
-            <!-- Hidden file inputs -->
-            <input
-                type="file"
-                id="imageInput"
-                accept="image/*"
-                hidden
-            >
+            <!-- CAPTCHA: SHOWN WHEN ANALYZING -->
+            <section id="captchaSection" hidden>
 
-            <input
-                type="file"
-                id="videoInput"
-                accept="video/*"
-                hidden
-            >
+                <div class="step-heading">
+                    <div>
+                        <span class="step-label">VERIFICATION</span>
+                        <h2>Human Verification</h2>
+                    </div>
+                </div>
 
-            <input
-                type="file"
-                id="audioInput"
-                accept="audio/*"
-                hidden
-            >
+                <p>Complete verification to continue.</p>
 
-        </section>
+                <div id="recaptcha-container"></div>
 
-        <!-- Text AI Detection -->
-        <section class="text-section" id="textSection" hidden>
+            </section>
 
-            <h2>Analyze Text</h2>
+            <!-- RESULTS -->
+            <div id="result"></div>
 
-            <p>Paste text below to check for signs of AI-generated writing.</p>
-
-            <textarea
-                id="textInput"
-                rows="8"
-                placeholder="Paste at least 40 words here..."
-                style="width: 100%; box-sizing: border-box;"
-            ></textarea>
-
-        </section>
-
-        <section class="link-section">
-
-            <h2>Analyze a Link</h2>
-
-            <input
-                type="url"
-                id="mediaURL"
-                placeholder="Paste a video or image link here..."
-            >
-
-            <button id="linkButton" type="button">
-                🔍 Analyze Link
-            </button>
-
-        </section>
-
-        <section class="preview-section">
-
-            <h2>Preview</h2>
-
-            <div id="preview">
-                <p>No media selected.</p>
-            </div>
-
-        </section>
-
-        <section class="camera-section" id="cameraSection">
-
-            <h2>Camera</h2>
-
-            <video id="cameraPreview" autoplay playsinline></video>
-
-            <button id="captureButton" type="button">
-                Capture Photo
-            </button>
-
-            <canvas id="cameraCanvas" hidden></canvas>
-
-        </section>
-        
-        <!-- reCAPTCHA -->
-        <section id="captchaSection" hidden>
-            <h2>Human Verification</h2>
-            <p>Please verify that you are human to continue.</p>
-            
-            <div id="recaptcha-container"></div>
-        </section>
-        
-        <button id="analyzeButton" type="button">
-            Analyze Media
-        </button>
-
-        <div id="result"></div>
+        </div>
 
     </main>
 
+    <!-- RECAPTCHA CALLBACK -->
     <script>
-    window.onRecaptchaLoad = function() {
-        // CAPTCHA initializes when the user requests analysis.
-    };
-</script>
-    
-    <script src="script.js"></script>
-    <script
-    src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit"
-    async
-    defer></script>
-</body>
+        window.onRecaptchaLoad = function () {
+            console.log("Google reCAPTCHA loaded successfully.");
+        };
+    </script>
 
+    <!-- EXISTING JAVASCRIPT -->
+    <script src="script.js"></script>
+
+    <!-- GOOGLE RECAPTCHA -->
+    <script
+        src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit"
+        async
+        defer
+    ></script>
+
+    <!-- BOOTSTRAP -->
+    <script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    ></script>
+
+</body>
 </html>

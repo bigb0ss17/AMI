@@ -96,47 +96,43 @@ def test():
         "message": "Hello from the backend!"
     }
 
-
 # -----------------------------
 # AI Analysis
 # -----------------------------
 
-def analyze_image(contents):
-    """
-    Analyze basic information about the uploaded image.
-    """
+AI_API_URL = "http://127.0.0.1:5000"
 
+
+def forward_to_ai(endpoint, files=None, json_data=None):
     try:
-        image = Image.open(BytesIO(contents))
-
-        width, height = image.size
-        image_format = image.format
-        color_mode = image.mode
-
-        logger.info(
-            f"Image processed: "
-            f"{width}x{height}, "
-            f"format={image_format}, "
-            f"mode={color_mode}"
+        response = requests.post(
+            f"{AI_API_URL}{endpoint}",
+            files=files,
+            json=json_data,
+            timeout=300
         )
 
-        return {
-            "result": "Image processed successfully",
-            "width": width,
-            "height": height,
-            "format": image_format,
-            "color_mode": color_mode
-        }
+        result = response.json()
 
-    except Exception as error:
+        if not response.ok:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=result.get("error", "AI analysis failed.")
+            )
 
-        logger.error(
-            f"Image processing failed: {error}"
-        )
+        return result
+
+    except requests.RequestException as error:
+        logger.error("AI API connection failed: %s", error)
 
         raise HTTPException(
-            status_code=400,
-            detail="Unable to process the image."
+            status_code=503,
+            detail="Unable to connect to the AI detection server."
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=502,
+            detail="AI detection server returned an invalid response."
         )
 
 # -----------------------------
@@ -219,19 +215,26 @@ async def upload_image(
     )
 
     # Analyze the image
-    analysis = analyze_image(contents)
+    analysis = forward_to_ai(
+        "/detect/image",
+        files={
+            "file": (
+                file.filename,
+                contents,
+                file.content_type
+                )
+            }
+        )
 
     logger.info(
         f"Image analysis completed: {file.filename}"
     )
 
     return {
+        **analysis,
         "analysis_id": analysis_id,
-        "filename": file.filename,
-        "message": "Image analyzed successfully!",
-        "status": "analysis_complete",
-        "analysis": analysis
-    }
+        "filename": file.filename
+        }
 
 # -----------------------------
 # Video upload
@@ -290,12 +293,16 @@ async def upload_video(
         f"{file.filename}"
     )
 
-    return {
-        "message": "Video uploaded successfully",
-        "filename": file.filename,
-        "size": len(contents),
-        "status": "analysis_complete"
-    }
+    return forward_to_ai(
+        "/detect/video",
+        files={
+            "file": (
+                file.filename,
+                contents,
+                file.content_type
+                )
+            }
+        )
     
 # -----------------------------
 # Audio upload
@@ -340,12 +347,16 @@ async def upload_audio(
 
     contents = await file.read()
 
-    return {
-        "message": "Audio uploaded successfully",
-        "filename": file.filename,
-        "size": len(contents),
-        "status": "analysis_complete"
-    }
+    return forward_to_ai(
+        "/detect/audio",
+        files={
+            "file": (
+                file.filename,
+                contents,
+                file.content_type
+            )
+        }
+    )
     
 # -----------------------------
 # Text analysis endpoint
@@ -378,12 +389,9 @@ async def detect_text(
             detail="Please provide at least 40 words."
         )
 
-    raise HTTPException(
-        status_code=501,
-        detail=(
-            "Text submission works, but an AI-text detection "
-            "model has not been configured."
-        )
+    return forward_to_ai(
+        "/detect/text",
+        json_data={"text": text}
     )
 
 # -----------------------------

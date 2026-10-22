@@ -36,7 +36,7 @@ app = Flask(__name__)
 CORS(app)  # lets your frontend call this from a different origin/port
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB upload limit (videos are big)
 
-AI_THRESHOLD = 0.5
+AI_THRESHOLD = 0.7
 
 # Labels (lowercased) that the models use to mean "AI-generated"
 AI_LABELS = {"fake", "artificial", "ai", "ai-generated", "spoof", "deepfake"}
@@ -203,7 +203,7 @@ def detect_audio():
 # run through the audio detector and blended in. Uses ffmpeg/ffprobe (already
 # required for audio), so no extra Python dependencies.
 # ---------------------------------------------------------------------------
-MAX_VIDEO_FRAMES = 16     # frames sampled per video (more = slower but steadier)
+MAX_VIDEO_FRAMES = 32     # frames sampled per video (more = slower but steadier)
 MIN_VIDEO_FRAMES_OK = 3   # need at least this many readable frames
 VIDEO_AUDIO_WEIGHT = 0.25  # share of the final score given to the audio track
 

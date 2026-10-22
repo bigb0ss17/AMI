@@ -17,6 +17,21 @@ const resultDiv = document.getElementById("result");
 
 const linkButton = document.getElementById("linkButton");
 const mediaURL = document.getElementById("mediaURL");
+const mediaButtons = [
+    imageButton,
+    videoButton,
+    audioButton,
+    textButton,
+    document.getElementById("cameraButton")
+];
+
+function setActiveMedia(button) {
+    mediaButtons.forEach(function (item) {
+        item.classList.remove("active");
+    });
+
+    button.classList.add("active");
+}
 
 // Use the local Flask server during development.
 // Use the same website address when deployed to AWS.
@@ -80,56 +95,92 @@ function initializeRecaptcha() {
 // -----------------------------------------
 
 function selectMedia(file, type) {
+    if (cameraStream) {
+        stopCamera();
+    }
+
     selectedFile = file;
     selectedType = type;
 
     resultDiv.textContent = "";
     textSection.hidden = true;
+
+    preview.hidden = false;
+    preview.style.display = "flex";
+
+    if (type === "image") {
+        setActiveMedia(imageButton);
+    } else if (type === "video") {
+        setActiveMedia(videoButton);
+    } else if (type === "audio") {
+        setActiveMedia(audioButton);
+    }
 }
 
 // -----------------------------------------
 // Helper: Display Detection Results
 // -----------------------------------------
 
-function displayResult(result) {
-    const aiPercent =
-        (result.ai_probability * 100).toFixed(2);
 
-    const humanPercent =
-        (result.human_probability * 100).toFixed(2);
+function displayResult(result) {
+    const aiPercent = Math.max(
+        0,
+        Math.min(100, result.ai_probability * 100)
+    ).toFixed(2);
+
+    const humanPercent = Math.max(
+        0,
+        Math.min(100, result.human_probability * 100)
+    ).toFixed(2);
 
     resultDiv.innerHTML = `
-        <h2>Detection Result</h2>
-        <p><strong>Media Type:</strong> ${result.type}</p>
-        <p><strong>Prediction:</strong> ${result.label}</p>
+        <h2>Analysis Complete</h2>
+
+        <p><strong>Media Type:</strong> <span id="resultType"></span></p>
+
+        <p><strong>Prediction:</strong> <span id="resultLabel"></span></p>
+
         <p><strong>AI Detection Score:</strong> ${aiPercent}%</p>
+
+        <div class="result-meter">
+            <div class="result-meter-fill ai"
+                 style="width: ${aiPercent}%"></div>
+        </div>
+
         <p><strong>Human Detection Score:</strong> ${humanPercent}%</p>
+
+        <div class="result-meter">
+            <div class="result-meter-fill human"
+                 style="width: ${humanPercent}%"></div>
+        </div>
+
+        <p class="small">
+            These scores are estimates and may not always be accurate.
+        </p>
     `;
 
-    if (result.frames_analyzed !== undefined) {
-        const frames = document.createElement("p");
-        frames.textContent =
-            `Video Frames Analyzed: ${result.frames_analyzed}`;
+    document.getElementById("resultType").textContent = result.type;
+    document.getElementById("resultLabel").textContent = result.label;
 
-        resultDiv.appendChild(frames);
+    if (result.frames_analyzed !== undefined) {
+        const p = document.createElement("p");
+        p.textContent = `Video Frames Analyzed: ${result.frames_analyzed}`;
+        resultDiv.appendChild(p);
     }
 
     if (result.word_count !== undefined) {
-        const words = document.createElement("p");
-        words.textContent =
-            `Words Analyzed: ${result.word_count}`;
-
-        resultDiv.appendChild(words);
+        const p = document.createElement("p");
+        p.textContent = `Words Analyzed: ${result.word_count}`;
+        resultDiv.appendChild(p);
     }
 
     if (result.analyzed_seconds !== undefined) {
-        const seconds = document.createElement("p");
-        seconds.textContent =
-            `Audio Seconds Analyzed: ${result.analyzed_seconds}`;
-
-        resultDiv.appendChild(seconds);
+        const p = document.createElement("p");
+        p.textContent = `Audio Seconds Analyzed: ${result.analyzed_seconds}`;
+        resultDiv.appendChild(p);
     }
 }
+
 
 // -----------------------------------------
 // Helper: Send Request to Flask
@@ -241,15 +292,22 @@ audioInput.addEventListener("change", function () {
 // -----------------------------------------
 
 textButton.addEventListener("click", function () {
+    stopCamera();
+
     selectedFile = null;
     selectedType = "text";
 
+    setActiveMedia(textButton);
+
     textSection.hidden = false;
+
+    preview.hidden = false;
+    preview.style.display = "flex";
 
     preview.innerHTML = `
         <p>
             Text selected. Paste your writing above,
-            then click Analyze Media.
+            then click Analyze Content.
         </p>
     `;
 
@@ -257,39 +315,109 @@ textButton.addEventListener("click", function () {
     textInput.focus();
 });
 
-// -----------------------------------------
-// Camera
-// -----------------------------------------
+
+ // -----------------------------------------
+ // Camera
+ // -----------------------------------------
 
 const cameraButton = document.getElementById("cameraButton");
 const cameraSection = document.getElementById("cameraSection");
 const cameraPreview = document.getElementById("cameraPreview");
+const cameraCanvas = document.getElementById("cameraCanvas");
+const captureButton = document.getElementById("captureButton");
+const stopCameraButton = document.getElementById("stopCameraButton");
+
+function stopCamera() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(function (track) {
+            track.stop();
+        });
+
+        cameraStream = null;
+    }
+
+    cameraPreview.pause();
+    cameraPreview.srcObject = null;
+
+    cameraSection.style.display = "none";
+
+    preview.hidden = false;
+    preview.style.display = "flex";
+}
+
 
 cameraButton.addEventListener("click", async function () {
     textSection.hidden = true;
+
+    selectedFile = null;
+    selectedType = null;
+
+    resultDiv.textContent = "";
+
+    setActiveMedia(cameraButton);
+
+    preview.hidden = false;
+    preview.style.display = "none";
+
     cameraSection.style.display = "block";
 
     try {
+        if (
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
+        ) {
+            throw new Error(
+                "Camera is unavailable. Use localhost or HTTPS."
+            );
+        }
+
         if (!cameraStream) {
             cameraStream = await navigator.mediaDevices.getUserMedia({
-                video: true
+                video: true,
+                audio: false
             });
         }
 
         cameraPreview.srcObject = cameraStream;
 
+        await cameraPreview.play();
+
+        cameraSection.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
+
+        console.log("Camera started successfully.");
+
     } catch (error) {
-        console.error("Camera access denied:", error);
-        alert("Unable to access the camera.");
+        console.error("Camera error:", error);
+
+        stopCamera();
+
+        alert("Unable to access camera: " + error.message);
     }
 });
 
-// -----------------------------------------
-// Capture Photo
-// -----------------------------------------
 
-const captureButton = document.getElementById("captureButton");
-const cameraCanvas = document.getElementById("cameraCanvas");
+stopCameraButton.addEventListener("click", function () {
+    stopCamera();
+
+    // Remove the camera highlight
+    cameraButton.classList.remove("active");
+
+    // Clear the previous selection
+    selectedFile = null;
+    selectedType = null;
+
+    // Restore the empty preview
+    preview.innerHTML = `
+        <div class="empty-preview">
+            <span class="empty-preview-icon">📂</span>
+            <p>No media selected yet.</p>
+            <small>Choose a content type above to get started.</small>
+        </div>
+    `;
+});
 
 captureButton.addEventListener("click", function () {
     if (!cameraStream || !cameraPreview.videoWidth) {
@@ -297,10 +425,10 @@ captureButton.addEventListener("click", function () {
         return;
     }
 
-    const context = cameraCanvas.getContext("2d");
-
     cameraCanvas.width = cameraPreview.videoWidth;
     cameraCanvas.height = cameraPreview.videoHeight;
+
+    const context = cameraCanvas.getContext("2d");
 
     context.drawImage(
         cameraPreview,
@@ -330,8 +458,17 @@ captureButton.addEventListener("click", function () {
             <img src="${imageURL}" alt="Captured photo">
         `;
 
+        stopCamera();
+
+        preview.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
+
     }, "image/png");
 });
+
+window.addEventListener("pagehide", stopCamera);
 
 // -----------------------------------------
 // Analyze Media
@@ -518,8 +655,23 @@ linkButton.addEventListener("click", function () {
         return;
     }
 
+    stopCamera();
+
     selectedFile = null;
     selectedType = "link";
+
+    textSection.hidden = true;
+
+    mediaButtons.forEach(function (button) {
+        button.classList.remove("active");
+    });
+
+    preview.hidden = false;
+    preview.style.display = "flex";
+
+    preview.innerHTML = `
+        <p>Link selected. Complete verification to analyze it.</p>
+    `;
 
     captchaSection.hidden = false;
     if (recaptchaWidgetId === null) {
