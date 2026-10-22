@@ -373,8 +373,11 @@ cameraButton.addEventListener("click", async function () {
 
         if (!cameraStream) {
             cameraStream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: false
+    video: {
+        facingMode: { ideal: "environment" }
+    },
+    audio: false
+});
             });
         }
 
